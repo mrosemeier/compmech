@@ -14,7 +14,6 @@ from compmech.constants import DOUBLE
 from .matlamina import MatLamina
 
 
-
 class Lamina(object):
     """
     =========  ===========================================================
@@ -62,11 +61,11 @@ class Lamina(object):
         sin3 = sint**3
         sin4 = sint**4
         sincos = sint * cost
-        self.L = np.array([[ cost, sint, 0],
+        self.L = np.array([[cost, sint, 0],
                            [-sint, cost, 0],
-                           [   0,     0, 1]], dtype=DOUBLE)
-        #STRESS
-        #to lamina
+                           [0,     0, 1]], dtype=DOUBLE)
+        # STRESS
+        # to lamina
         self.R = np.array(
             [[cos2,   sin2, 0,   0,    0,     sin2t],
              [sin2,   cos2, 0,   0,    0,    -sin2t],

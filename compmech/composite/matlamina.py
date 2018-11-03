@@ -62,6 +62,7 @@ class MatLamina(object):
     on equation: `E = 2 \times (1+\nu) \times G`.
 
     """
+
     def __init__(self):
         super(MatLamina, self).__init__()
         self.e1 = None
@@ -100,7 +101,6 @@ class MatLamina(object):
         self.q66 = None
         self.u = None
 
-
     def rebuild(self):
         #
         # from references:
@@ -115,13 +115,14 @@ class MatLamina(object):
         nu31 = self.nu31
         nu23 = self.nu23
         nu32 = self.nu32
-        delta = (1-nu12*nu21-nu23*nu32-nu31*nu13-2*nu21*nu32*nu13)/(e1*e2)
-        c11 = (1    - nu23*nu23)/(delta*e2)
-        c12 = (nu21 + nu31*nu23)/(delta*e2)
-        c13 = (nu31 + nu21*nu32)/(delta*e2)
-        c22 = (1    - nu13*nu31)/(delta*e1)
-        c23 = (nu32 + nu12*nu31)/(delta*e1)
-        c33 = e3*(1    - nu12*nu21)/(delta*e1*e2)
+        delta = (1 - nu12 * nu21 - nu23 * nu32 - nu31 *
+                 nu13 - 2 * nu21 * nu32 * nu13) / (e1 * e2)
+        c11 = (1 - nu23 * nu23) / (delta * e2)
+        c12 = (nu21 + nu31 * nu23) / (delta * e2)
+        c13 = (nu31 + nu21 * nu32) / (delta * e2)
+        c22 = (1 - nu13 * nu31) / (delta * e1)
+        c23 = (nu32 + nu12 * nu31) / (delta * e1)
+        c33 = e3 * (1 - nu12 * nu21) / (delta * e1 * e2)
         c44 = self.g23
         c55 = self.g13
         c66 = self.g12
@@ -129,9 +130,9 @@ class MatLamina(object):
             [[c11, c12, c13,   0,   0,   0],
              [c12, c22, c23,   0,   0,   0],
              [c13, c23, c33,   0,   0,   0],
-             [  0,   0,   0, c44,   0,   0],
-             [  0,   0,   0,   0, c55,   0],
-             [  0,   0,   0,   0,   0, c66]], dtype = DOUBLE)
+             [0,   0,   0, c44,   0,   0],
+             [0,   0,   0,   0, c55,   0],
+             [0,   0,   0,   0,   0, c66]], dtype=DOUBLE)
 
         #
         # from references:
@@ -145,15 +146,15 @@ class MatLamina(object):
                  - self.nu12 * self.nu23 * self.nu31
                  - self.nu13 * self.nu21 * self.nu32)
         den = np.array(den, dtype=DOUBLE)
-        self.q11 = self.e1*(1         - self.nu23 * self.nu32) / den
-        self.q12 = self.e1*(self.nu21 + self.nu23 * self.nu31) / den
-        self.q13 = self.e1*(self.nu31 + self.nu21 * self.nu32) / den
-        self.q21 = self.e2*(self.nu12 + self.nu13 * self.nu32) / den
-        self.q22 = self.e2*(1         - self.nu13 * self.nu31) / den
-        self.q23 = self.e2*(self.nu32 + self.nu12 * self.nu31) / den
-        self.q31 = self.e3*(self.nu13 + self.nu12 * self.nu32) / den
-        self.q32 = self.e3*(self.nu23 + self.nu13 * self.nu21) / den
-        self.q33 = self.e3*(1         - self.nu12 * self.nu21) / den
+        self.q11 = self.e1 * (1 - self.nu23 * self.nu32) / den
+        self.q12 = self.e1 * (self.nu21 + self.nu23 * self.nu31) / den
+        self.q13 = self.e1 * (self.nu31 + self.nu21 * self.nu32) / den
+        self.q21 = self.e2 * (self.nu12 + self.nu13 * self.nu32) / den
+        self.q22 = self.e2 * (1 - self.nu13 * self.nu31) / den
+        self.q23 = self.e2 * (self.nu32 + self.nu12 * self.nu31) / den
+        self.q31 = self.e3 * (self.nu13 + self.nu12 * self.nu32) / den
+        self.q32 = self.e3 * (self.nu23 + self.nu13 * self.nu21) / den
+        self.q33 = self.e3 * (1 - self.nu12 * self.nu21) / den
         self.q44 = self.g12
         self.q55 = self.g23
         self.q66 = self.g13
@@ -167,11 +168,11 @@ class MatLamina(object):
         # example 1.2.2 Laminated composite shell: buckling of a
         # cylindrical panel with a circular hole
         #
-        u1 = (3*self.q11 + 3*self.q22 + 2*self.q12 + 4*self.q44) / 8.
+        u1 = (3 * self.q11 + 3 * self.q22 + 2 * self.q12 + 4 * self.q44) / 8.
         u2 = (self.q11 - self.q22) / 2.
-        u3 = (self.q11 + self.q22 - 2*self.q12 - 4*self.q44) / 8.
-        u4 = (self.q11 + self.q22 + 6*self.q12 - 4*self.q44) / 8.
-        u5 = (u1-u4) / 2.
+        u3 = (self.q11 + self.q22 - 2 * self.q12 - 4 * self.q44) / 8.
+        u4 = (self.q11 + self.q22 + 6 * self.q12 - 4 * self.q44) / 8.
+        u5 = (u1 - u4) / 2.
         u6 = (self.q55 + self.q66) / 2.
         u7 = (self.q55 - self.q66) / 2.
         self.u = np.array(
@@ -180,20 +181,19 @@ class MatLamina(object):
              [u4,   0,    0, -u3,   0],                # q12
              [u6,  u7,    0,   0,   0],                # q55
              [u6, -u7,    0,   0,   0],                # q66
-             [ 0,   0,  -u7,   0,   0],                # q56
+             [0,   0,  -u7,   0,   0],                # q56
              [u5,   0,    0, -u3,   0],                # q44
-             [ 0,   0, u2/2,   0,  u3],                # q14
-             [ 0,   0, u2/2,   0, -u3]], dtype=DOUBLE)  # q24
-
+             [0,   0, u2 / 2,   0,  u3],                # q14
+             [0,   0, u2 / 2,   0, -u3]], dtype=DOUBLE)  # q24
 
     def read_inputs(self, inputs={}):
         if len(inputs) > 0:
             self = user_setattr(self, inputs)
         if not self.nu21:
-            nu21 = np.array(self.nu12*self.e2/self.e1, dtype=DOUBLE)
+            nu21 = np.array(self.nu12 * self.e2 / self.e1, dtype=DOUBLE)
             self.nu21 = nu21
         if not self.nu12:
-            nu12 = np.array(self.nu21*self.e1/self.e2, dtype=DOUBLE)
+            nu12 = np.array(self.nu21 * self.e1 / self.e2, dtype=DOUBLE)
             self.nu12 = nu12
 
 
@@ -240,11 +240,11 @@ def read_laminaprop(laminaprop=None):
     #laminaProp = (e1, e2, nu12, g12, g13, g23, e3, nu13, nu23)
     if laminaprop == None:
         error('laminaprop must be a tuple in the following format:\n\t'
-              +'(e1, e2, nu12, g12, g13, g23, e3, nu13, nu23)')
-    if len(laminaprop) == 3: #ISOTROPIC
+              + '(e1, e2, nu12, g12, g13, g23, e3, nu13, nu23)')
+    if len(laminaprop) == 3:  # ISOTROPIC
         e = laminaprop[0]
         nu = laminaprop[2]
-        g = e/(2*(1+nu))
+        g = e / (2 * (1 + nu))
         laminaprop = (e, e, nu, g, g, g, e, nu, nu)
     nu12 = laminaprop[2]
 
@@ -267,4 +267,3 @@ def read_laminaprop(laminaprop=None):
     matlam.rebuild()
 
     return matlam
-
