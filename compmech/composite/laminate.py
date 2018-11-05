@@ -165,6 +165,8 @@ class Laminate(object):
         self.g12 = None
         self.g13 = None
         self.g23 = None
+        self.a1 = None
+        self.a2 = None
         self.xiA = None
         self.xiB = None
         self.xiD = None
@@ -196,6 +198,12 @@ class Laminate(object):
         self.g12 = 1. / (self.t * a33)
         self.nu12 = - a12 / a11
         self.nu21 = - a12 / a22
+
+        # Eq. 5.110 Ganesh/Rana Lecture19 Hygrothermal laminate theory
+        a = np.squeeze(np.array(np.dot(AI, self.QLAL)))
+        self.a1 = a[0]
+        self.a2 = a[1]
+        self.a12 = a[2]
 
     def calc_lamination_parameters(self):
         """Calculate the lamination parameters.
@@ -321,6 +329,8 @@ class Laminate(object):
         self.A_general = np.zeros([5, 5], dtype=DOUBLE)
         self.B_general = np.zeros([5, 5], dtype=DOUBLE)
         self.D_general = np.zeros([5, 5], dtype=DOUBLE)
+        self.QLALN_general = np.zeros([5], dtype=DOUBLE)
+        self.QLALM_general = np.zeros([5], dtype=DOUBLE)
 
         lam_thick = sum([ply.t for ply in self.plies])
         self.t = lam_thick
@@ -333,7 +343,11 @@ class Laminate(object):
             self.A_general += ply.QL * (hk - hk_1)
             self.B_general += 1 / 2. * ply.QL * (hk**2 - hk_1**2)
             self.D_general += 1 / 3. * ply.QL * (hk**3 - hk_1**3)
-
+            # TODO add CTE laminate matrix
+            # Reddy Eq. 3.3.41
+            QLAL_dot = np.dot(ply.QL, ply.AL)
+            self.QLALN_general += QLAL_dot * (hk - hk_1)
+            self.QLALM_general += 1 / 2. * QLAL_dot * (hk**2 - hk_1**2)
         self.A = self.A_general[0:3, 0:3]
         self.B = self.B_general[0:3, 0:3]
         self.D = self.D_general[0:3, 0:3]
@@ -346,6 +360,11 @@ class Laminate(object):
         self.ABDE = np.zeros((8, 8), dtype=DOUBLE)
         self.ABDE[0:6, 0:6] = self.ABD
         self.ABDE[6:8, 6:8] = self.E
+
+        self.QLALN = self.QLALN_general[0:3]
+        self.QLALM = self.QLALM_general[0:3]
+
+        self.QLAL = np.concatenate([self.QLALN, self.QLALM], axis=0)
 
     def force_balanced_LP(self):
         r"""Force balanced lamination parameters
@@ -452,8 +471,8 @@ class Laminate(object):
         self.ABDE[0:3, 3:6] = 0
         self.ABDE[3:6, 0:3] = 0
 
-    def apply_load(self, F):
+    def apply_load(self, F, dT):
         ''' Obtain strains of stacking due to loading
         F = [n_x, n_y, n_xy, m_x, m_y, m_xy] in N/m
         '''
-        return np.dot(inv(self.ABD), F)
+        return np.dot(inv(self.ABD), (F + self.QLAL * dT))

@@ -205,15 +205,15 @@ def read_laminaprop(laminaprop=None):
     laminaprop : list or tuple
         Tuple containing the folliwing entries:
 
-            (e1, e2, nu12, g12, g13, g23, e3, nu13, nu23)
+            (e1, e2, nu12, g12, g13, g23, e3, nu13, nu23, a1, a2, a3)
 
         for othotropic materials the user can only supply:
 
-            (e1, e2, nu12, g12, g13, g23)
+            (e1, e2, nu12, g12, g13, g23, a1, a2)
 
         for isotropic materials the user can only supply:
 
-            (e1, e2, nu12)
+            (e1, e2, nu12, a1)
 
         ======  ==============================
         symbol  value
@@ -227,6 +227,9 @@ def read_laminaprop(laminaprop=None):
         e3      Young Module in direction 3
         nu13    13 Poisson's ratio
         nu23    23 Poisson's ratio
+        a1      CTE in direction 1
+        a2      CTE in direction 2
+        a3      CTE in direction 3
         ======  ==============================
 
     Returns
@@ -240,7 +243,7 @@ def read_laminaprop(laminaprop=None):
     #laminaProp = (e1, e2, nu12, g12, g13, g23, e3, nu13, nu23)
     if laminaprop == None:
         error('laminaprop must be a tuple in the following format:\n\t'
-              + '(e1, e2, nu12, g12, g13, g23, e3, nu13, nu23)')
+              + '(e1, e2, nu12, g12, g13, g23, e3, nu13, nu23, a1, a2, a3)')
     if len(laminaprop) == 3:  # ISOTROPIC
         e = laminaprop[0]
         nu = laminaprop[2]
@@ -263,6 +266,16 @@ def read_laminaprop(laminaprop=None):
     matlam.g12 = laminaprop[3]
     matlam.g13 = laminaprop[4]
     matlam.g23 = laminaprop[5]
+
+    if len(laminaprop) == 6:  # ISOTROPIC
+        matlam.a1 = laminaprop[3]
+        matlam.a2 = laminaprop[4]
+        matlam.a3 = laminaprop[5]
+
+    if len(laminaprop) == 12:
+        matlam.a1 = laminaprop[9]
+        matlam.a2 = laminaprop[10]
+        matlam.a3 = laminaprop[11]
 
     matlam.rebuild()
 

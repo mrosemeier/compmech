@@ -127,7 +127,7 @@ class Lamina(object):
                            [q16, q26, q66,    0,    0],
                            [0,    0,    0,  q44,    0],
                            [0,    0,    0,    0, q55]], dtype=DOUBLE)
-
+        # Reddy Eq. 2.4.8
         q11L = q11 * cos4 + 2 * (q12 + 2 * q66) * sin2 * cos2 + q22 * sin4
         q12L = (q11 + q22 - 4 * q66) * sin2 * cos2 + q12 * (sin4 + cos4)
         q22L = q11 * sin4 + 2 * (q12 + 2 * q66) * sin2 * cos2 + q22 * cos4
@@ -150,11 +150,21 @@ class Lamina(object):
         # TODO add the thermal coeficient terms when calculating the
         #     stresses... to take into account eventual thermal expansions /
         #     contractions
+        a1 = self.matobj.a1
+        a2 = self.matobj.a2
+        a3 = self.matobj.a3
+
+        # Reddy Eq 2.4.9
+        a11L = a1 * cos2 + a2 * sin2
+        a22L = a1 * sin2 + a2 * cos2
+        a12L = (a1 - a2) * sint * cost
+
+        self.AL = np.array([a11L, a22L, a12L,    0,   0], dtype=DOUBLE)
 
     def calc_loading(self, eps_laminate):
         ''' laminate strain needs to come in the following notation
         TODO: extend model to handle 3D stresses
-        [eps_x, eps_y, eps_x, gamma_yz, gamma_xz, gamma_xy]
+        [eps_x, eps_y, eps_z, gamma_yz, gamma_xz, gamma_xy]
         and output is:
         [sigma_1, sigma_2, sigma_3, tau_23, tau_13, tau_12]
         '''
