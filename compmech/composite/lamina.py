@@ -152,7 +152,12 @@ class Lamina(object):
         #     contractions
         a1 = self.matobj.a1
         a2 = self.matobj.a2
-        a3 = self.matobj.a3
+        #a3 = self.matobj.a3
+
+        if not a1:
+            a1 = 0.
+        if not a2:
+            a2 = 0.
 
         # Reddy Eq 2.4.9
         a11L = a1 * cos2 + a2 * sin2
