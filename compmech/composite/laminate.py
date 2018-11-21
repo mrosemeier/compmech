@@ -474,5 +474,13 @@ class Laminate(object):
     def apply_load(self, F, dT):
         ''' Obtain strains of stacking due to loading
         F = [n_x, n_y, n_xy, m_x, m_y, m_xy] in N/m
+        :param: F: force vector
+        :param: dT: delta temperature
+        :return: eps0: vector of strains due to normal loads eps0=[eps_x, eps_y, eps_xy]
+        :return: eps1: vector of strains due to bending loads eps1=[eps_x, eps_y, eps_xy]
         '''
-        return np.dot(inv(self.ABD), (F + self.QLAL * dT))
+        # Reddy, Eq. 3.3.40
+        eps = np.dot(inv(self.ABD), (F + self.QLAL * dT))
+        eps0 = eps[0:3]
+        eps1 = eps[3:6]
+        return eps0, eps1
