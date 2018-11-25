@@ -159,6 +159,8 @@ class Lamina(object):
         if not a2:
             a2 = 0.
 
+        self.A = np.array([a1, a2, 0,    0,   0], dtype=DOUBLE)
+
         # Reddy Eq 2.4.9
         a11L = a1 * cos2 + a2 * sin2
         a22L = a1 * sin2 + a2 * cos2
@@ -166,7 +168,7 @@ class Lamina(object):
 
         self.AL = np.array([a11L, a22L, a12L,    0,   0], dtype=DOUBLE)
 
-    def calc_loading(self, eps_laminate):
+    def calc_loading(self, eps_laminate, dT):
         ''' laminate strain needs to come in the following notation
         TODO: extend model to handle 3D stresses
         [eps_x, eps_y, eps_z, gamma_yz, gamma_xz, gamma_xy]
@@ -177,7 +179,14 @@ class Lamina(object):
         #     2*e12 = e6    2*e13 = e5    2*e23 = e4
         # self.rebuild()
         # self.theta
-
+        '''
+        # calculate thermal loads
+        _eps_therm = self.AL * dT
+        eps_therm = np.zeros_like(eps_laminate)
+        eps_therm[0] = _eps_therm[0]
+        eps_therm[1] = _eps_therm[1]
+        eps_therm[5] = _eps_therm[2]
+        '''
         T = self.Te
 
         # transform strain to lamina coordinate sysytem
@@ -198,7 +207,7 @@ class Lamina(object):
         eps_plane[2] = eps[5]
         eps_plane[3] = eps[3]
         eps_plane[4] = eps[4]
-        sig_plane = np.dot(self.Q, eps_plane)
+        sig_plane = np.dot(self.Q, (self.AL * dT - eps_plane))
         # reorder back to 3D COS
         # [sigma_1, sigma_2, sigma_3, tau_23, tau_13, tau_12]
         sig = np.zeros_like(eps)
