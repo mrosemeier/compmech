@@ -9,6 +9,7 @@ from __future__ import division, absolute_import
 
 import numpy as np
 from numpy import cos, sin
+from numpy.linalg import inv
 
 from compmech.constants import DOUBLE
 from .matlamina import MatLamina
@@ -65,7 +66,7 @@ class Lamina(object):
                            [-sint, cost, 0],
                            [0,     0, 1]], dtype=DOUBLE)
         # STRESS
-        # to lamina
+        # to lamina  Reddy Eq. 2.3.10
         self.R = np.array(
             [[cos2,   sin2, 0,   0,    0,     sin2t],
              [sin2,   cos2, 0,   0,    0,    -sin2t],
@@ -73,7 +74,7 @@ class Lamina(object):
              [0,      0, 0, cost, -sint,         0],
              [0,      0, 0, sint,  cost,         0],
              [-sincos, sincos, 0,   0,    0, cos2 - sin2]], dtype=DOUBLE)
-        # to laminate (VDI 2014 eq. 35, 36)
+        # to laminate (VDI 2014 eq. 35, 36) # Reddy Eq. 2.3.8
         self.T = np.array(
             [[cos2,    sin2, 0,    0,   0,    -sin2t],
              [sin2,    cos2, 0,    0,   0,     sin2t],
@@ -96,6 +97,7 @@ class Lamina(object):
         # self.Rstrain = np.transpose(self.Tstress)
         # to lamina
         # self.Tstrain = np.transpose(self.Rstress)
+
         if isinstance(self.matobj, MatLamina):
             e1 = self.matobj.e1
             e2 = self.matobj.e2
@@ -147,26 +149,42 @@ class Lamina(object):
                             [0,    0,    0, q44L, q45L],
                             [0,    0,    0, q45L, q55L]], dtype=DOUBLE)
 
-        # TODO add the thermal coeficient terms when calculating the
-        #     stresses... to take into account eventual thermal expansions /
-        #     contractions
+        # Reddy Eq. 2.3.17
+        C = self.matobj.c
+        self.CL = np.dot(np.dot(self.T, C), np.transpose(
+            self.T))
+
+        # Bogetti Eq. 28
+        self.delta_CL45 = self.CL[3, 3] * \
+            self.CL[4, 4] - self.CL[3, 4] * self.CL[4, 3]
+
         a1 = self.matobj.a1
         a2 = self.matobj.a2
-        #a3 = self.matobj.a3
+        a3 = self.matobj.a3
 
         if not a1:
             a1 = 0.
         if not a2:
             a2 = 0.
+        if not a3:
+            a3 = 0.
 
         self.A = np.array([a1, a2, 0,    0,   0], dtype=DOUBLE)
 
-        # Reddy Eq 2.4.9
+        self.A3D = np.array([a1, a2, a3,    0,   0, 0], dtype=DOUBLE)
+
+        # Reddy Eq 2.3.23
         a11L = a1 * cos2 + a2 * sin2
         a22L = a1 * sin2 + a2 * cos2
         a12L = (a1 - a2) * sint * cost
+        a13L = 0.
+        a23L = 0.
+        a33L = a3
 
         self.AL = np.array([a11L, a22L, a12L,    0,   0], dtype=DOUBLE)
+
+        self.AL3D = np.array(
+            [a11L, a22L, a33L,    a23L,   a13L, a12L], dtype=DOUBLE)
 
     def calc_loading(self, eps_laminate, dT):
         ''' laminate strain needs to come in the following notation
@@ -190,7 +208,7 @@ class Lamina(object):
         T = self.Te
 
         # transform strain to lamina coordinate sysytem
-        from numpy.linalg import inv
+
         # Rstrain = np.transpose(T)  # np.transpose(T)
         Rstrain = inv(T)
 

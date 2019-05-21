@@ -20,6 +20,7 @@ class MatLamina(object):
     ==========  ==========================================================
     e1          Young Modulus in direction 1
     e2          Young Modulus in direction 2
+    e3          Young Modulus in direction 3
     g12         in-plane shear modulus
     g13         transverse shear modulus for plane 1-Z
     g23         transverse shear modulus for plane 2-Z

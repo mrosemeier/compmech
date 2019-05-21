@@ -17,7 +17,7 @@ from numpy.linalg.linalg import inv
 
 
 def read_stack(stack, plyt=None, laminaprop=None, plyts=[], laminaprops=[],
-               offset=0.):
+               offset=0., lam3D=False):
     """Read a laminate stacking sequence data.
 
     An ``Laminate`` object is returned based on the inputs given.
@@ -38,6 +38,8 @@ def read_stack(stack, plyt=None, laminaprop=None, plyts=[], laminaprops=[],
     offset : float, optional
         Offset along the normal axis about the mid-surface, which influences
         the laminate properties.
+    lam3D : bool
+        Use 3D model by Chou 1971, requires 3D material properties
 
     Notes
     -----
@@ -48,14 +50,19 @@ def read_stack(stack, plyt=None, laminaprop=None, plyts=[], laminaprops=[],
 
         laminaprop = (E11, E22, nu12, G12, G13, G23)
 
-    For isotropic pliey, the ``laminaprop`` should be::
+    For isotropic plies, the ``laminaprop`` should be::
 
         laminaprop = (E, E, nu)
+
+    For lam3D, the ``laminaprop`` should be::
+
+        laminaprop = (e1, e2, nu12, g12, g13, g23, e3, nu13, nu23, a1, a2, a3)
 
     """
     lam = Laminate()
     lam.offset = offset
     lam.stack = stack
+    lam.lam3D = lam3D
 
     if not plyts:
         if not plyt:
@@ -176,6 +183,7 @@ class Laminate(object):
         self.E = None
         self.ABD = None
         self.ABDE = None
+        self.lam3D = False
 
     def rebuild(self):
         lam_thick = 0
@@ -191,19 +199,45 @@ class Laminate(object):
             e1, e2, g12, nu12, nu21
 
         """
-        AI = np.matrix(self.ABD, dtype=DOUBLE).I
-        a11, a12, a22, a33 = AI[0, 0], AI[0, 1], AI[1, 1], AI[2, 2]
-        self.e1 = 1. / (self.t * a11)
-        self.e2 = 1. / (self.t * a22)
-        self.g12 = 1. / (self.t * a33)
-        self.nu12 = - a12 / a11
-        self.nu21 = - a12 / a22
+        if not self.lam3D:
+            AI = np.matrix(self.ABD, dtype=DOUBLE).I
+            a11, a12, a22, a33 = AI[0, 0], AI[0, 1], AI[1, 1], AI[2, 2]
+            self.e1 = 1. / (self.t * a11)
+            self.e2 = 1. / (self.t * a22)
+            self.g12 = 1. / (self.t * a33)
+            self.nu12 = - a12 / a11
+            self.nu21 = - a12 / a22
 
-        # Eq. 5.110 Ganesh/Rana Lecture19 Hygrothermal laminate theory
-        a = np.squeeze(np.array(np.dot(AI, self.QLAL)))
-        self.a1 = a[0]
-        self.a2 = a[1]
-        self.a12 = a[2]
+            # Eq. 5.110 Ganesh/Rana Lecture19 Hygrothermal laminate theory
+            # or Eq. 4.72 into Eg.4.64 with delta_T=1 (Kaw 2006)
+            a = np.squeeze(np.array(np.dot(AI, self.QLAL)))
+            self.a1 = a[0]
+            self.a2 = a[1]
+            self.a12 = a[2]
+
+        else:
+            H = inv(self.C_general)  # Bogetti 1995 Eq. 29
+
+            self.e1 = 1. / H[0, 0]  # Bogetti 1995 Eq. 30
+            self.e2 = 1. / H[1, 1]  # Bogetti 1995 Eq. 31
+            self.e3 = 1. / H[2, 2]  # Bogetti 1995 Eq. 32
+            self.g23 = 1. / H[3, 3]  # Bogetti 1995 Eq. 33
+            self.g13 = 1. / H[4, 4]  # Bogetti 1995 Eq. 34
+            self.g12 = 1. / H[5, 5]  # Bogetti 1995 Eq. 35
+            self.nu23 = - H[1, 2] / H[1, 1]  # Bogetti 1995 Eq. 36
+            self.nu13 = - H[0, 2] / H[0, 0]  # Bogetti 1995 Eq. 37
+            self.nu12 = - H[0, 1] / H[0, 0]  # Bogetti 1995 Eq. 38
+            self.nu32 = - H[1, 2] / H[2, 2]  # Bogetti 1995 Eq. 39
+            self.nu31 = - H[0, 2] / H[2, 2]  # Bogetti 1995 Eq. 40
+            self.nu21 = - H[0, 1] / H[1, 1]  # Bogetti 1995 Eq. 41
+
+            N = self.N
+            self.a1 = np.dot(H[0, :], N)  # Bogetti Eq. 44
+            self.a2 = np.dot(H[1, :], N)  # Bogetti Eq. 45
+            self.a3 = np.dot(H[2, :], N)  # Bogetti Eq. 46
+            self.a23 = np.dot(H[3, :], N)  # Bogetti Eq. 47
+            self.a13 = np.dot(H[4, :], N)  # Bogetti Eq. 48
+            self.a12 = np.dot(H[5, :], N)  # Bogetti Eq. 49
 
     def calc_lamination_parameters(self):
         """Calculate the lamination parameters.
@@ -365,6 +399,99 @@ class Laminate(object):
         self.QLALM = self.QLALM_general[0:3]
 
         self.QLAL = np.concatenate([self.QLALN, self.QLALM], axis=0)
+
+        self._calc_stiffness_matrix_3D()
+
+    def _calc_stiffness_matrix_3D(self):
+        ''' Calculates the laminate stiffness matrix
+        Chou, Carleone and Hsu, 1971, Elastic Constants of Layered Media
+        Theory assumes symmetric laminate
+        '''
+
+        # general laminate stiffness matrix
+        self.C_general = np.zeros([6, 6], dtype=DOUBLE)
+
+        lam_thick = self.t
+
+        # Chou 1971 Eq. 8
+
+        def _sum_l_up(j, lam_thick):
+            sum_l_up = 0.
+            for plyl in self.plies:
+                tl = plyl.t
+                vl = tl / lam_thick
+                CLl = plyl.CL
+                sum_l_up += vl * CLl[2, j] / CLl[2, 2]
+            return sum_l_up
+
+        def _sum_l_low(lam_thick):
+            sum_l_low = 0.
+            for plyl in self.plies:
+                tl = plyl.t
+                vl = tl / lam_thick
+                CLl = plyl.CL
+                sum_l_low += vl / CLl[2, 2]
+            return sum_l_low
+
+        for i in [0, 1, 2, 5]:
+            for j in [0, 1, 2, 5]:
+                for plyk in self.plies:
+                    tk = plyk.t
+                    vk = tk / lam_thick
+                    CLk = plyk.CL
+
+                    self.C_general[i, j] += vk * (CLk[i, j] -
+                                                  (CLk[i, 2] * CLk[2, j]) /
+                                                  (CLk[2, 2]) +
+                                                  (CLk[i, 2] * _sum_l_up(j, lam_thick)) /
+                                                  (CLk[2, 2] * _sum_l_low(lam_thick)))
+        # Chou 1971 Eq. 9
+
+        def _sum_k_up_34(i, j, lam_thick):
+            sum_k_up_34 = 0.
+            for plyk in self.plies:
+                tk = plyk.t
+                vk = tk / lam_thick
+                CLk = plyk.CL
+                deltak = plyk.delta_CL45
+                sum_k_up_34 += vk / deltak * CLk[i, j]
+            return sum_k_up_34
+
+        def _sum_kl_low_34(lam_thick):
+            sum_kl_low_34 = 0.
+            for plyk in self.plies:
+                tk = plyk.t
+                vk = tk / lam_thick
+                CLk = plyk.CL
+                deltak = plyk.delta_CL45
+                for plyl in self.plies:
+                    tl = plyl.t
+                    vl = tl / lam_thick
+                    CLl = plyl.CL
+                    deltal = plyk.delta_CL45
+
+                    sum_kl_low_34 += (vk * vl) /\
+                        (deltak * deltal) * \
+                        (CLk[3, 3] * CLl[4, 4] - CLk[3, 4] * CLl[4, 3])
+
+            return sum_kl_low_34
+
+        for i in [3, 4]:
+            for j in [3, 4]:
+                self.C_general[i, j] = _sum_k_up_34(
+                    i, j, lam_thick) / _sum_kl_low_34(lam_thick)
+
+        # Bogetti Eq. 43
+        self.N = np.zeros([6], dtype=DOUBLE)
+
+        for i in range(6):
+            for j in range(6):
+                for plyk in self.plies:
+                    tk = plyk.t
+                    vk = tk / lam_thick
+                    CLk = plyk.CL
+                    AL3D = plyk.AL3D
+                    self.N[i] += CLk[i, j] * AL3D[j] * vk
 
     def force_balanced_LP(self):
         r"""Force balanced lamination parameters
