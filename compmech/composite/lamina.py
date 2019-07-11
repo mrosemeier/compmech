@@ -225,7 +225,7 @@ class Lamina(object):
         eps_plane[2] = eps[5]
         eps_plane[3] = eps[3]
         eps_plane[4] = eps[4]
-        sig_plane = np.dot(self.Q, (self.AL * dT - eps_plane))
+        sig_plane = np.dot(self.Q, (eps_plane - self.AL * dT))
         # reorder back to 3D COS
         # [sigma_1, sigma_2, sigma_3, tau_23, tau_13, tau_12]
         sig = np.zeros_like(eps)
