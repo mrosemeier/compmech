@@ -386,6 +386,9 @@ class Laminate(object):
         self.B = self.B_general[0:3, 0:3]
         self.D = self.D_general[0:3, 0:3]
         self.E = self.A_general[3:5, 3:5]
+        # Note Reddy convention Reddy Eq. 2.4.8
+        # E11 = A44 = 23 = yz
+        # E22 = A55 = 13 = xz
 
         conc1 = np.concatenate([self.A, self.B], axis=1)
         conc2 = np.concatenate([self.B, self.D], axis=1)
