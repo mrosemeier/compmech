@@ -363,21 +363,25 @@ class Laminate(object):
         self.A_general = np.zeros([5, 5], dtype=DOUBLE)
         self.B_general = np.zeros([5, 5], dtype=DOUBLE)
         self.D_general = np.zeros([5, 5], dtype=DOUBLE)
+
+        self.D1z_general = np.zeros([5, 5], dtype=DOUBLE)
+
         self.QLALN_general = np.zeros([5], dtype=DOUBLE)
         self.QLALM_general = np.zeros([5], dtype=DOUBLE)
 
         lam_thick = sum([ply.t for ply in self.plies])
         self.t = lam_thick
 
-        h0 = -lam_thick / 2 + self.offset
-        for ply in self.plies:
-            hk_1 = h0
-            h0 += ply.t
-            hk = h0
+        h0 = -lam_thick / 2 + self.offset  # start lower edge of laminate
+        for ply in self.plies:  # Reddy Fig.3.3.1
+            hk_1 = h0  # lower edge of ply
+            h0 += ply.t  # upper edge of ply
+            hk = h0  # lower edge of next ply
             self.A_general += ply.QL * (hk - hk_1)
             self.B_general += 1 / 2. * ply.QL * (hk**2 - hk_1**2)
             self.D_general += 1 / 3. * ply.QL * (hk**3 - hk_1**3)
-            # TODO add CTE laminate matrix
+            # Vlachoutsis 1992,  nominator in Eq. 7
+            self.D1z_general += ply.QL * (hk - hk_1) * 0.5 * (hk + hk_1)
             # Reddy Eq. 3.3.41
             QLAL_dot = np.dot(ply.QL, ply.AL)
             self.QLALN_general += QLAL_dot * (hk - hk_1)
@@ -389,6 +393,52 @@ class Laminate(object):
         # Note Reddy convention Reddy Eq. 2.4.8
         # E11 = A44 = 23 = yz
         # E22 = A55 = 13 = xz
+
+        # Shear correction according to Vlachoutsis 1992
+        # neutral axis/surface Eq. 7
+        zn_general = self.D1z_general / self.A_general
+        #zn_general[0, 0]
+        #zn_general[1, 1]
+        zn = np.diag(zn_general[:2, :2])
+
+        # Vlachoutsis 1992, in Eq. 16b
+        # reorganize such that G13 is at [0,0]
+        dalp = np.diag(np.fliplr(np.flipud(self.E)))
+
+        Ralp = np.zeros([2], dtype=DOUBLE)
+        galp = np.zeros([2], dtype=DOUBLE)
+        Ialp = np.zeros([2], dtype=DOUBLE)
+
+        h0 = -lam_thick / 2 + self.offset  # start lower edge of laminate
+        for ply in self.plies:  # Reddy Fig.3.3.1
+            hk_1 = h0  # lower edge of ply
+            h0 += ply.t  # upper edge of ply
+            hk = h0  # lower edge of next ply
+
+            # Vlachoutsis 1992, Eq. 16a
+            Dalp = np.diag(ply.QL[:2, :2])
+            #z = 0.5 * (hk + hk_1)
+            dz = (hk - hk_1)
+
+            # refine ply
+            nref = 150  # should be enough for convergence
+            dzr = dz / nref
+            zr = hk_1 + 0.5 * dzr
+            for _ in range(nref):
+
+                Ralp += Dalp * dzr * (zr - zn)**2
+
+                # Vlachoutsis 1992, Eq. 11
+                galp += -Dalp * dzr * (zr - zn)
+
+                # Vlachoutsis 1992, Eq. 16c
+                Galp = np.diag(np.fliplr(np.flipud(ply.QL[3:5, 3:5])))
+                Ialp += galp**2 / Galp * dzr
+
+                zr += dzr
+
+        # Vlachoutsis 1992, in Eq. 15
+        self.KS = Ralp**2 / (dalp * Ialp)
 
         conc1 = np.concatenate([self.A, self.B], axis=1)
         conc2 = np.concatenate([self.B, self.D], axis=1)
