@@ -46,6 +46,7 @@ class Lamina(object):
         self.L = None
         self.R = None
         self.T = None
+        self.Q = None
         self.QL = None
         self.laminates = []
 

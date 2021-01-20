@@ -8,7 +8,6 @@ Composite Laminate Module (:mod:`compmech.composite.laminate`)
 from __future__ import division, absolute_import
 
 import numpy as np
-
 from .lamina import Lamina
 from .matlamina import read_laminaprop
 from compmech.constants import DOUBLE
@@ -119,7 +118,7 @@ def read_lamination_parameters(thickness, laminaprop,
     Returns
     -------
     lam : Laminate
-        laminate with the ABD and ABDE matrices already calculated
+        laminate with the ABD and ABDE matric/home/felixes already calculated
 
     """
     lam = Laminate()
@@ -351,7 +350,7 @@ class Laminate(object):
                               [0, 0, 0, 0, 0, 0, E45, E44]],
                              dtype=DOUBLE)
 
-    def calc_constitutive_matrix(self):
+    def calc_constitutive_matrix(self, KS=None):
         """Calculates the laminate constitutive matrix
 
         This is the commonly called ``ABD`` matrix with ``shape=(6, 6)`` when
@@ -373,6 +372,7 @@ class Laminate(object):
         self.t = lam_thick
 
         h0 = -lam_thick / 2 + self.offset  # start lower edge of laminate
+
         for ply in self.plies:  # Reddy Fig.3.3.1
             hk_1 = h0  # lower edge of ply
             h0 += ply.t  # upper edge of ply
@@ -394,51 +394,256 @@ class Laminate(object):
         # E11 = A44 = 23 = yz
         # E22 = A55 = 13 = xz
 
-        # Shear correction according to Vlachoutsis 1992
-        # neutral axis/surface Eq. 7
-        zn_general = self.D1z_general / self.A_general
-        #zn_general[0, 0]
-        #zn_general[1, 1]
-        zn = np.diag(zn_general[:2, :2])
+        if not KS:
 
-        # Vlachoutsis 1992, in Eq. 16b
-        # reorganize such that G13 is at [0,0]
-        dalp = np.diag(np.fliplr(np.flipud(self.E)))
+            A1 = self.A[0, 0]
+            A2 = self.A[1, 1]
+            A3 = self.A[2, 2]
+            A4 = self.A[2, 1]
+            A5 = self.A[0, 2]
+            A6 = self.A[1, 2]
+            
+            B1 = self.B[0, 0]
+            B2 = self.B[1, 1]
+            B3 = self.B[2, 2]
+            B4 = self.B[0, 1]
+            B5 = self.B[0, 2]
+            B6 = self.B[1, 2]
+            
+            D1 = self.D[0, 0]
+            D2 = self.D[1, 1]
+            D3 = self.D[2, 2]
+            D4 = self.D[0, 1]
+            D5 = self.D[0, 2]
+            D6 = self.D[1, 2]
+            
+            Q = np.array([
+                [A1, A4, B1, B4, A5, B5, 0, 0, A5, 0, B5, 0],
+                [A4, A2, B4, B2, A6, B6, 0, 0, A6, 0, B6, 0],
+                [B1, B4, D1, D4, B5, D5, 0, 0, B5, 0, D5, 0],
+                [B4, B2, D4, D2, B6, D6, 0, 0, B6, 0, D6, 0],
+                [A5, A6, B5, B6, A3, B3, 0, 0, A3, 0, B3, 0],
+                [B5, B6, D5, D6, B3, D3, 0, 0, B3, 0, D3, 0],
+                [0, A3, 0, B3, 0, 0, A3, B3, A5, A6, B5, B6],
+                [0, B3, 0, D3, 0, 0, B3, D3, B5, B6, D5, D6],
+                [0, A5, 0, B6, 0, 0, A5, B5, A1, A4, B1, B4],
+                [0, A6, 0, B6, 0, 0, A5, B5, A1, A4, B4, B2],
+                [0, B5, 0, D5, 0, 0, B5, D5, B1, B4, D1, D4],
+                [0, B6, 0, D6, 0, 0, B6, D6, B4, B2, D4, D2]
+            ])
 
-        Ralp = np.zeros([2], dtype=DOUBLE)
-        galp = np.zeros([2], dtype=DOUBLE)
-        Ialp = np.zeros([2], dtype=DOUBLE)
+            Q_inv = np.linalg.inv(Q)
 
-        h0 = -lam_thick / 2 + self.offset  # start lower edge of laminate
-        for ply in self.plies:  # Reddy Fig.3.3.1
-            hk_1 = h0  # lower edge of ply
-            h0 += ply.t  # upper edge of ply
-            hk = h0  # lower edge of next ply
+            H = np.transpose(np.array([
+                [Q_inv[0, 2], Q_inv[1, 2], Q_inv[2, 2], Q_inv[3, 2], Q_inv[4, 2], Q_inv[5, 2],
+                 Q_inv[6, 2], Q_inv[7, 2], Q_inv[8, 2], Q_inv[9, 2], Q_inv[10, 2], Q_inv[11, 2]],
+                [Q_inv[0, 11], Q_inv[1, 11], Q_inv[2, 11], Q_inv[3, 11], Q_inv[4, 11], Q_inv[5, 11],
+                 Q_inv[6, 11], Q_inv[7, 11], Q_inv[8, 11], Q_inv[9, 11], Q_inv[10, 11], Q_inv[11, 11]]
+            ]))
 
-            # Vlachoutsis 1992, Eq. 16a
-            Dalp = np.diag(ply.QL[:2, :2])
-            #z = 0.5 * (hk + hk_1)
-            dz = (hk - hk_1)
 
-            # refine ply
-            nref = 150  # should be enough for convergence
-            dzr = dz / nref
-            zr = hk_1 + 0.5 * dzr
-            for _ in range(nref):
+            z0 = -lam_thick / 2 + self.offset
+            _d = np.zeros((2, 2))
 
-                Ralp += Dalp * dzr * (zr - zn)**2
+            d = np.zeros((2, 2))
 
-                # Vlachoutsis 1992, Eq. 11
-                galp += -Dalp * dzr * (zr - zn)
+            Ai = 0
 
-                # Vlachoutsis 1992, Eq. 16c
-                Galp = np.diag(np.fliplr(np.flipud(ply.QL[3:5, 3:5])))
-                Ialp += galp**2 / Galp * dzr
+            W2 = np.zeros((2, 2))
 
-                zr += dzr
+            c1 = 0
+            c2 = 0
+            c3 = 0
+            c4 = 0
+            c5 = 0
+            c6 = 0
+            c7 = 0
+            c8 = 0
+            c9 = 0
+            c10 = 0
+            c11 = 0
+            c12 = 0
 
-        # Vlachoutsis 1992, in Eq. 15
-        self.KS = Ralp**2 / (dalp * Ialp)
+
+            def _r_t_xi(C, H, xi):
+
+                r_xi_1 = C[0, 0] * H[0, xi] + C[0, 1] * H[1, xi] + C[0, 2] * (2 * H[8, xi] + H[4, xi]) \
+                         + C[1, 2] * H[9, xi] + C[2, 2] * (H[6, xi] + H[1, xi])
+                r_xi_2 = C[0, 1] * H[8, xi] + C[1, 1] * H[9, xi] + C[1, 2] * (2 * H[1, xi] + H[6, xi]) \
+                         + C[0, 2] * H[0, xi] + C[2, 2] * (H[8, xi] + H[5, xi])
+
+                t_xi_1 = C[0, 0] * H[2, xi] + C[0, 1] * H[3, xi] + C[0, 2] * (2 * H[10, xi] + H[5, xi]) \
+                         + C[1, 2] * H[11, xi] + C[2, 2] * (H[3, xi] + H[7, xi])
+                t_xi_2 = C[0, 1] * H[10, xi] + C[1, 1] * H[11, xi] + C[3, 4] * (2 * H[3, xi] + H[7, xi]) \
+                         + C[0, 2] * H[2, xi] + C[2, 2] * (H[5, xi] + H[10, xi])
+
+                return r_xi_1, r_xi_2, t_xi_1, t_xi_2
+
+            for ply, i in zip(self.plies, range(len(self.plies))):  # Reddy Fig.3.3.1
+                hk_1 = h0  # lower edge of ply
+                h0 += ply.t  # upper edge of ply
+                hk = h0  # lower edge of next ply
+                z = (h0 - hk_1)
+
+                C = ply.Q
+                theta = np.deg2rad(ply.theta)
+                c = np.cos(theta)
+                s = np.sin(theta)
+
+                Ai = (0.5 * (hk + hk_1) / 2) / (C[3, 3] * C[4, 4] - s ** 2 * c ** 2 * C[3, 4] ** 2)
+
+                c1 += C[3, 3] * z
+                c2 += C[3, 4] * s * c * z
+                c3 += Ai * C[3, 3] ** 3 * z ** 2
+                c4 += 2 * Ai * C[3, 3] ** 2 * s * c * C[3, 4] * z ** 2
+                c5 += c4 / 2 # = Ai * C[3, 3] * C[3, 4] * s * c * z ** 2
+                c6 += C[4, 4] * z
+                c7 += Ai * s * c * C[3, 4] * C[3, 3] * C[4, 4] * z ** 2
+                c8 += 2 * (Ai * s * c * C[3, 4] * z) ** 2 * (C[3, 3] + C[4, 4])
+                c9 += 2 * Ai * (C[3, 4] * s * c * z) ** 3
+                c10 += Ai * C[4, 4] ** 3 * z ** 2
+                c11 += 2 * Ai * C[4, 4] ** 2 * s * c * C[3, 4] * z ** 2
+                c12 += c11 / 2
+
+                # xi = 1
+                r_1_1, r_1_2, t_1_1, t_1_2 = _r_t_xi(C, H, 0)
+                # xi = 2
+                r_2_1, r_2_2, t_2_1, t_2_2 = _r_t_xi(C, H, 1)
+
+                if i < len(self.plies):
+                    _d[0, 0] -= (r_1_1 + t_1_1) * z
+                    _d[1, 0] -= (r_2_1 + t_2_1) * z
+                    _d[0, 1] -= (r_1_2 + t_1_2) * z
+                    _d[1, 1] -= (r_2_2 + t_2_2) * z
+
+            for ply, i in zip(self.plies, range(len(self.plies))):  # Reddy Fig.3.3.1
+                hk_1 = h0  # lower edge of ply
+                h0 += ply.t  # upper edge of ply
+                hk = h0  # lower edge of next ply
+                z = []
+
+                def _zk(zo, zu, k):
+                    return 1/k * (zo ** k - zu ** k)
+
+                for k in [1, 2, 3, 4, 5]:
+                    z.append(_zk(h0, hk_1, k))
+
+                C = ply.Q
+
+                # xi = 1
+                r_1_1, r_1_2, t_1_1, t_1_2 = _r_t_xi(C, H, 0)
+                # xi = 2
+                r_2_1, r_2_2, t_2_1, t_2_2 = _r_t_xi(C, H, 1)
+
+                r = np.array([[r_1_1, r_1_2],
+                              [r_2_1, r_2_2]])
+
+                t = np.array([[t_1_1, t_1_2],
+                              [t_2_1, t_2_2]])
+
+                d = _d + hk_1 * r + 0.5 * t * hk_1 ** 2
+
+                Ca3b3 = np.array([[C[4,4], C[4, 3]],
+                                  [C[3, 4], C[3, 3]]])
+
+                def _W2(a, b, x, e): # TODO: find C_a3b3 here
+                    coeff = -0.5 * ((-1) ** (a + b) * Ca3b3[a, b] / (C[3, 3] * C[4, 4] - C[3, 4] ** 2))
+
+                    s1 = z[0] * (d[0, a] * d[0, b] + d[1, a] * d[1, b] + d[x, 0] * d[e, 0] + d[x, 1] * d[e, 1])
+
+                    s2 = 2 * (d[x, 0] * d[e, 0] + d[x, 1] * d[e, 1] + d[e, a] * r[x, b] \
+                              + d[e, b] * r[x, a] + d[x, a] * r[e, b]) * z[1]
+
+                    s3 = (0.5 * (d[x, 0] * t[e, 0] + d[x, 1] * t[e, 1] + d[e, a] * t[x, b] + d[e, b] * t[x, a] \
+                                 + d[x, a] * t[e, b]) + r[x, b] * r[e, a] + r[x, a] * r[e, b]) * z[2]
+
+                    s4 = 0.5 * (r[x, 0] * t[e, 0] + r[x, 1] * t[e, 1] + r[e, a] * t[x, b] \
+                                + r[e, b] * r[x, a] + r[x, a] + t[e, b]) * z[3]
+
+                    s5 = 0.25 * (t[x, b] * t[e, a] + t[e, b] * t[x, a]) * z[4]
+                    #print coeff, s1, s2, s3, s4, s5
+                    return coeff * (s1 + s2 + s3 + s4 + s5)
+
+                for alp in [0, 1]:
+                    for beta in [0, 1]:
+                        W2[0, 0] += _W2(alp, beta, 0, 0)
+                        W2[0, 1] += _W2(alp, beta, 0, 1)
+                        W2[1, 0] += _W2(alp, beta, 1, 0)
+                        W2[1, 1] += _W2(alp, beta, 1, 1)
+
+
+
+            def equations(p):
+
+                k1, k2, E = p
+                W = W2[0, 0]
+                f1 = k1 ** 2 * W * c1 ** 2 + k1 ** 2 * E * (2 * W * c1 * c2) * k1 ** 2 * E ** 2 * W * c2 ** 2 - E * c5 \
+                     - E ** 2 * c6 - c4
+                W = W2[1, 1]
+                f2 = k2 ** 2 * E * c6 + k2 ** 2 * 2 * W * c6 * c2 + k2 ** 2 * (1 / E) * W * c2 - E * c10 - c11 - c12
+                W = W2[1, 0]
+                f3 = E * W * c7 * c2 + (1 / E) * (W * c2 * c1 - c9) + (1 / E ** 2) * c10 + W * (c7 * c1 + c2 ** 2 + 2 * c8)
+                return (f1, f2, f3)
+
+            from scipy.optimize import least_squares
+            #res = least_squares(equations, (1, 1, 1), bounds=((0, 0, 0), (1, 1, 5)))
+            #print res
+            from scipy.optimize import fsolve
+            #k1, k2, E = fsolve(equations, res.x)
+            k1, k2, E = fsolve(equations, (5./6, 5./8, 1))
+            print k1, k2, E
+            self.KS = k2
+
+
+
+
+        else:
+            # Shear correction according to Vlachoutsis 1992
+            # neutral axis/surface Eq. 7
+            zn_general = self.D1z_general / self.A_general
+            #zn_general[0, 0]
+            #zn_general[1, 1]
+            zn = np.diag(zn_general[:2, :2])
+
+            # Vlachoutsis 1992, in Eq. 16b
+            # reorganize such that G13 is at [0,0]
+            dalp = np.diag(np.fliplr(np.flipud(self.E)))
+
+            Ralp = np.zeros([2], dtype=DOUBLE)
+            galp = np.zeros([2], dtype=DOUBLE)
+            Ialp = np.zeros([2], dtype=DOUBLE)
+
+            h0 = -lam_thick / 2 + self.offset  # start lower edge of laminate
+            for ply in self.plies:  # Reddy Fig.3.3.1
+                hk_1 = h0  # lower edge of ply
+                h0 += ply.t  # upper edge of ply
+                hk = h0  # lower edge of next ply
+
+                # Vlachoutsis 1992, Eq. 16a
+                Dalp = np.diag(ply.QL[:2, :2])
+                #z = 0.5 * (hk + hk_1)
+                dz = (hk - hk_1)
+
+                # refine ply
+                nref = 150  # should be enough for convergence
+                dzr = dz / nref
+                zr = hk_1 + 0.5 * dzr
+                for _ in range(nref):
+
+                    Ralp += Dalp * dzr * (zr - zn)**2
+
+                    # Vlachoutsis 1992, Eq. 11
+                    galp += -Dalp * dzr * (zr - zn)
+
+                    # Vlachoutsis 1992, Eq. 16c
+                    Galp = np.diag(np.fliplr(np.flipud(ply.QL[3:5, 3:5])))
+                    Ialp += galp**2 / Galp * dzr
+
+                    zr += dzr
+
+            # Vlachoutsis 1992, in Eq. 15
+            self.KS = Ralp**2 / (dalp * Ialp)
+
 
         conc1 = np.concatenate([self.A, self.B], axis=1)
         conc2 = np.concatenate([self.B, self.D], axis=1)
@@ -454,6 +659,7 @@ class Laminate(object):
         self.QLAL = np.concatenate([self.QLALN, self.QLALM], axis=0)
 
         self._calc_stiffness_matrix_3D()
+
 
     def _calc_stiffness_matrix_3D(self):
         ''' Calculates the laminate stiffness matrix
