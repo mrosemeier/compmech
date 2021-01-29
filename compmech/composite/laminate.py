@@ -463,6 +463,7 @@ class Laminate(object):
             c10 = 0
             c11 = 0
             c12 = 0
+            c13 = 0
 
 
             def _r_t_xi(C, H, xi):
@@ -496,14 +497,15 @@ class Laminate(object):
                 c2 += C[3, 4] * s * c * z
                 c3 += Ai * C[3, 3] ** 3 * z ** 2
                 c4 += 2 * Ai * C[3, 3] ** 2 * s * c * C[3, 4] * z ** 2
-                c5 += c4 / 2 # = Ai * C[3, 3] * C[3, 4] * s * c * z ** 2
+                c5 += Ai * C[3, 3] ** 2 * s * c * C[3, 4] * z ** 2
                 c6 += C[4, 4] * z
                 c7 += Ai * s * c * C[3, 4] * C[3, 3] * C[4, 4] * z ** 2
-                c8 += 2 * (Ai * s * c * C[3, 4] * z) ** 2 * (C[3, 3] + C[4, 4])
-                c9 += 2 * Ai * (C[3, 4] * s * c * z) ** 3
-                c10 += Ai * C[4, 4] ** 3 * z ** 2
-                c11 += 2 * Ai * C[4, 4] ** 2 * s * c * C[3, 4] * z ** 2
-                c12 += c11 / 2
+                c8 += Ai * (C[3, 4] * s * c * z) ** 2 * C[3, 3]
+                c9 += Ai * (C[3, 4] * s * c * z) ** 2 * C[4, 4]
+                c10 += Ai * (C[3, 4] * s * c * z) ** 2
+                c11 += Ai * C[4, 4] ** 3 * z ** 2
+                c12 += 2 * Ai * C[4, 4] ** 2 * s * c * C[3, 4] * z ** 2
+                c13 += Ai * C[4, 4] ** 2 * s * c * C[3, 4] * z ** 2
 
                 # xi = 1
                 r_1_1, r_1_2, t_1_1, t_1_2 = _r_t_xi(C, H, 0)
@@ -516,7 +518,9 @@ class Laminate(object):
                     _d[0, 1] -= (r_1_2 + t_1_2) * z
                     _d[1, 1] -= (r_2_2 + t_2_2) * z
 
-            for ply, i in zip(self.plies, range(len(self.plies))):  # Reddy Fig.3.3.1
+                i += 1
+
+            for ply in self.plies:  # Reddy Fig.3.3.1
                 hk_1 = h0  # lower edge of ply
                 h0 += ply.t  # upper edge of ply
                 hk = h0  # lower edge of next ply
@@ -546,7 +550,7 @@ class Laminate(object):
                 Ca3b3 = np.array([[C[4,4], C[4, 3]],
                                   [C[3, 4], C[3, 3]]])
 
-                def _W2(a, b, x, e): # TODO: find C_a3b3 here
+                def _W2(a, b, x, e):
                     coeff = -0.5 * ((-1) ** (a + b) * Ca3b3[a, b] / (C[3, 3] * C[4, 4] - C[3, 4] ** 2))
 
                     s1 = z[0] * (d[0, a] * d[0, b] + d[1, a] * d[1, b] + d[x, 0] * d[e, 0] + d[x, 1] * d[e, 1])
@@ -561,7 +565,7 @@ class Laminate(object):
                                 + r[e, b] * r[x, a] + r[x, a] + t[e, b]) * z[3]
 
                     s5 = 0.25 * (t[x, b] * t[e, a] + t[e, b] * t[x, a]) * z[4]
-                    #print coeff, s1, s2, s3, s4, s5
+
                     return coeff * (s1 + s2 + s3 + s4 + s5)
 
                 for alp in [0, 1]:
@@ -572,27 +576,27 @@ class Laminate(object):
                         W2[1, 1] += _W2(alp, beta, 1, 1)
 
 
-
             def equations(p):
 
                 k1, k2, E = p
                 W = W2[0, 0]
-                f1 = k1 ** 2 * W * c1 ** 2 + k1 ** 2 * E * (2 * W * c1 * c2) * k1 ** 2 * E ** 2 * W * c2 ** 2 - E * c5 \
+                f1 = k1 ** 2 * W * c1 ** 2 + k1 ** 2 * E * (2 * W * c1 * c2) + k1 ** 2 * E ** 2 * W * c2 ** 2 - E * c5 \
                      - E ** 2 * c6 - c4
-                W = W2[1, 1]
-                f2 = k2 ** 2 * E * c6 + k2 ** 2 * 2 * W * c6 * c2 + k2 ** 2 * (1 / E) * W * c2 - E * c10 - c11 - c12
-                W = W2[1, 0]
-                f3 = E * W * c7 * c2 + (1 / E) * (W * c2 * c1 - c9) + (1 / E ** 2) * c10 + W * (c7 * c1 + c2 ** 2 + 2 * c8)
-                return (f1, f2, f3)
 
-            from scipy.optimize import least_squares
-            #res = least_squares(equations, (1, 1, 1), bounds=((0, 0, 0), (1, 1, 5)))
-            #print res
+                W = W2[1, 1]
+                f2 = (k2 ** 2 * E ** 2) * c6 + (E * k2 ** 2) * 2 * W * c6 * c2 + (k2 ** 2) * W * c2 - (E ** 2) * c11 - \
+                     (E) * (c12 + c13)
+
+                W = W2[1, 0]
+                f3 = (k1 * k2 * E) * (W * (c6 * c1 + c2 ** 2)) + (E ** 2 * k1 * k2) * (W * c6 * c2) + \
+                     k1 * k2 * (W * c1 * c2) + (E ** 2) * (2 * c9) + (E) * 2 * (c10 + c7) + 2 * c8
+                return [f1, f2, f3]
+
             from scipy.optimize import fsolve
-            #k1, k2, E = fsolve(equations, res.x)
-            k1, k2, E = fsolve(equations, (5./6, 5./8, 1))
-            print k1, k2, E
-            self.KS = k2
+            res = fsolve(equations, (0.5, 0.5, 0.5))
+            print res
+            print equations(res)
+            #self.KS = k2
 
 
 
