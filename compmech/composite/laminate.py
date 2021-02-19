@@ -442,7 +442,6 @@ class Laminate(object):
             ]))
 
 
-            z0 = -lam_thick / 2 + self.offset
             _d = np.zeros((2, 2))
 
             d = np.zeros((2, 2))
@@ -526,11 +525,11 @@ class Laminate(object):
                 hk = h0  # lower edge of next ply
                 z = []
 
-                def _zk(zo, zu, k):
-                    return 1/k * (zo ** k - zu ** k)
+                def _zk(zo, zu, n):
+                    return 1/n * (zo ** n - zu ** n)
 
-                for k in [1, 2, 3, 4, 5]:
-                    z.append(_zk(h0, hk_1, k))
+                for n in [1, 2, 3, 4, 5]:
+                    z.append(_zk(h0, hk_1, n))
 
                 C = ply.Q
 
@@ -575,7 +574,6 @@ class Laminate(object):
                         W2[1, 0] += _W2(alp, beta, 1, 0)
                         W2[1, 1] += _W2(alp, beta, 1, 1)
 
-
             def equations(p):
 
                 k1, k2, E = p
@@ -592,11 +590,19 @@ class Laminate(object):
                      k1 * k2 * (W * c1 * c2) + (E ** 2) * (2 * c9) + (E) * 2 * (c10 + c7) + 2 * c8
                 return [f1, f2, f3]
 
-            from scipy.optimize import fsolve
-            res = fsolve(equations, (0.5, 0.5, 0.5))
-            print res
-            print equations(res)
+            def f(p):
+                return abs(np.sum(np.array(equations(p))**2)-0)
+
+
+            from scipy.optimize import fsolve, fmin, least_squares
+            guess = fmin(f, (0.5, 0.5, 100))
+            #print guess
+            res = fsolve(equations, guess)
+            #print res
+            res = least_squares(equations, (0.192, 0.192, 1), bounds=((0, 0, -np.inf), (1, 1, np.inf)))
+            print res.x
             #self.KS = k2
+
 
 
 
